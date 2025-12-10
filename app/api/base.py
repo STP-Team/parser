@@ -15,6 +15,10 @@ class BaseAPI:
         response = self.session.get(
             url=f"{self.base_url}{endpoint}",
             **kwargs,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+            },
         )
         return response
 
@@ -22,5 +26,9 @@ class BaseAPI:
         response = self.session.post(
             url=f"{self.base_url}{endpoint}",
             **kwargs,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/plain, */*",
+            },
         )
         return response

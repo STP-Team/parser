@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class Employee(BaseModel):
-    id: int
+    id: int = Field(alias="id", description="Идентификатор сотрудника")
     fullname: str = Field(alias="name")
     fired_date: str | None = Field(alias="firedDate")
 
@@ -35,9 +35,11 @@ class EmployeeInfo(BaseModel):
 
 
 class PostHistoryItem(BaseModel):
-    ID: str
-    TRANSFER_DATE: str
-    POST_NAME: str
+    id: str = Field(alias="ID", description="Идентификатор перевода")
+    transfer: str = Field(
+        alias="TRANSFER_DATE", description="День изменения должности сотрудника"
+    )
+    post_name: str = Field(alias="POST_NAME", description="Название новой должности")
 
 
 class EmployeeData(BaseModel):
