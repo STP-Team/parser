@@ -10,9 +10,36 @@ class KpiAPI(BaseAPI):
         "НЦК": 7,
     }
     reports = {
-        "НТП1": {"FLR": 23, "AHT": 16, "": 1},
-        "НТП2": {"FLR": 24, "AHT": 16, "CS": 1},
-        "НЦК": {"FLR": 25, "AHT": 11, "CS": 1},
+        "НТП1": {
+            "AHT": 16,
+            "FLR": 23,
+            "CS": 1,
+            "Sales": 0,
+            "Delay": 0,
+            "OK": 0,
+            "POK": 0,
+            "GOK": 0,
+        },
+        "НТП2": {
+            "AHT": 16,
+            "FLR": 24,
+            "CS": 1,
+            "Sales": 0,
+            "Delay": 0,
+            "OK": 0,
+            "POK": 0,
+            "GOK": 0,
+        },
+        "НЦК": {
+            "AHT": 11,
+            "FLR": 25,
+            "CS": 1,
+            "Sales": 0,
+            "Delay": 0,
+            "OK": 0,
+            "POK": 0,
+            "GOK": 0,
+        },
     }
 
     def __init__(self, session):

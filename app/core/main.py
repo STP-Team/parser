@@ -5,11 +5,10 @@ import sys
 
 from aiohttp import ClientSession
 
-from app.api.employees import EmployeesAPI
-from app.api.sl import SlAPI
 from app.core.auth import authenticate
 from app.core.config import settings
 from app.core.scheduler import scheduler
+from app.tasks.employees import fill_birthdays
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,20 +33,13 @@ async def main():
             session=session,
         )
 
-        employees_api = EmployeesAPI(session=session)
-        employees = await employees_api.get_employee(employee_id=99918)
-        print(employees)
-
-        sl_api = SlAPI(session=session)
-        sl = await sl_api.get_sl(
-            start_date="10.12.2025",
-            stop_date="11.12.2025",
-            units=[7],
+        scheduler.add_job(
+            fill_birthdays,
+            "cron",
+            hour="12",
+            args=[session],
         )
-        print(sl)
-
-        # scheduler.add_job(fill_sl, "interval", seconds=3, args=[session])
-        # scheduler.start()
+        scheduler.start()
 
         # Keep the program running
         try:

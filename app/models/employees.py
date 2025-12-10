@@ -16,7 +16,7 @@ class EmployeeInfo(BaseModel):
     )
     unit_id: str = Field(alias="UNIT_ID", description="Идентификатор направления")
     unit_name: str = Field(alias="UNIT_NAME", description="Название направления")
-    head_fullname: str = Field(
+    head_fullname: str | None = Field(
         alias="HEAD_NAME", description="ФИО руководителя сотрудника"
     )
     employment_date: str = Field(
@@ -25,8 +25,10 @@ class EmployeeInfo(BaseModel):
     transfer_date: str = Field(
         alias="TRANSFER_DATE", description="День изменения должности сотрудника"
     )
-    birthday: str = Field(alias="BIRTHDAY", description="День рождения сотрудника")
-    photo: str = Field(alias="PHOTO", description="Фотография сотрудника")
+    birthday: str | None = Field(
+        alias="BIRTHDAY", description="День рождения сотрудника"
+    )
+    photo: str | None = Field(alias="PHOTO", description="Фотография сотрудника")
     city: str = Field(alias="CITY_NAME", description="Город сотрудника")
     trainee_id: int | None = Field(
         alias="TRAINEE_ID", description="Идентификатор стажера"
