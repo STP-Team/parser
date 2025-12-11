@@ -3,7 +3,6 @@ import logging
 from collections import defaultdict
 from time import perf_counter
 
-from aiohttp import ClientSession
 from sqlalchemy import text
 from stp_database.models.KPI import SpecDayKPI, SpecMonthKPI, SpecWeekKPI
 
@@ -142,18 +141,16 @@ async def _generic_fill_period(
     )
 
 
-async def fill_kpi(session: ClientSession) -> None:
+async def fill_kpi(api: KpiAPI) -> None:
     """Основная функция для вызова в планировщике.
 
     Args:
-        session: Авторизованная сессия ОКЦ
+        api: Экземпляр API KPI
 
     """
-    kpi_api = KpiAPI(session)
-
-    await _fill_day(kpi_api)
-    await _fill_week(kpi_api)
-    await _fill_month(kpi_api)
+    await _fill_day(api)
+    await _fill_week(api)
+    await _fill_month(api)
 
 
 async def _fill_day(api: KpiAPI) -> None:

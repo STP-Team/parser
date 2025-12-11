@@ -710,7 +710,7 @@ wheels = [
 [[package]]
 name = "stp-database"
 version = "2.0"
-source = { git = "https://github.com/STP-Team/stp-database#bf8c245182dabbc34a076a88e418592685c55283" }
+source = { git = "https://github.com/STP-Team/stp-database#8b66bfa2e0ffd0f1daff460186031c8453f1231d" }
 dependencies = [
     { name = "aiomysql" },
     { name = "infrastructure" },

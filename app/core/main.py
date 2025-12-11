@@ -5,12 +5,15 @@ import sys
 
 from aiohttp import ClientSession
 
+from app.api.kpi import KpiAPI
+from app.api.premium import PremiumAPI
 from app.core.auth import authenticate
 from app.core.config import settings
 from app.core.scheduler import scheduler
 from app.services.logger import setup_logging
 from app.tasks.employees import fill_birthdays
 from app.tasks.kpi import fill_kpi
+from app.tasks.premium import fill_specialists_premium
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +46,19 @@ async def main():
             args=[session],
         )
 
-        await fill_kpi(session)
-        # scheduler.add_job(
-        #     fill_kpi,
-        #     "interval",
-        #     seconds=10,
-        #     args=[session],
-        # )
+        premium_api = PremiumAPI(session)
+        kpi_api = KpiAPI(session)
+
+        await fill_kpi(kpi_api)
+        await fill_specialists_premium(premium_api)
+
+        # await fill_kpi(session)
+        scheduler.add_job(
+            fill_specialists_premium,
+            "interval",
+            hours=12,
+            args=[premium_api],
+        )
         scheduler.start()
 
         # Keep the program running
