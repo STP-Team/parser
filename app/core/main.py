@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.scheduler import scheduler
 from app.services.logger import setup_logging
 from app.tasks.employees import fill_birthdays
+from app.tasks.kpi import fill_kpi
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,14 @@ async def main():
             hour="12",
             args=[session],
         )
+
+        await fill_kpi(session)
+        # scheduler.add_job(
+        #     fill_kpi,
+        #     "interval",
+        #     seconds=10,
+        #     args=[session],
+        # )
         scheduler.start()
 
         # Keep the program running

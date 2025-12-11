@@ -1,6 +1,10 @@
+import logging
+
 from aiohttp import ClientSession
 
 from app.api.sl import SlAPI
+
+logger = logging.getLogger(__name__)
 
 
 async def fill_sl(session: ClientSession) -> None:
@@ -19,5 +23,3 @@ async def fill_sl(session: ClientSession) -> None:
         units=[7],
         queues=queue_list,
     )
-
-    print(sl)

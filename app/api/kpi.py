@@ -1,6 +1,22 @@
+import logging
 from datetime import datetime, timedelta
 
 from app.api.base import BaseAPI
+from app.models.kpi import (
+    AHTDataRecord,
+    CSIDataRecord,
+    DelayDataRecord,
+    FLRDataRecord,
+    GenericKPIDataRecord,
+    KPIDataRecord,
+    KPIResponse,
+    POKDataRecord,
+    SalesDataRecord,
+    TypedKPIResponse,
+)
+from app.services.constants import time_format
+
+logger = logging.getLogger(__name__)
 
 
 class KpiAPI(BaseAPI):
@@ -12,39 +28,81 @@ class KpiAPI(BaseAPI):
     reports = {
         "НТП1": {
             "AHT": 16,
-            "FLR": 23,
-            "CS": 1,
+            "FLR": 59,  # С правками - 59, без - 23
+            "CSI": 12,  # С правками - 12, без - 33
+            "POK": 8,  # С правками - 8, без - 34
+            "DELAY": 39,  # Используется нерабочее время
             "Sales": 0,
-            "Delay": 0,
-            "OK": 0,
-            "POK": 0,
-            "GOK": 0,
         },
         "НТП2": {
             "AHT": 16,
-            "FLR": 24,
-            "CS": 1,
+            "FLR": 36,  # С правками - 36, без - 24
+            "CSI": 12,  # С правками - 12, без - 33
+            "POK": 8,  # С правками - 8, без - 34
+            "DELAY": 39,  # Используется нерабочее время
             "Sales": 0,
-            "Delay": 0,
-            "OK": 0,
-            "POK": 0,
-            "GOK": 0,
         },
         "НЦК": {
             "AHT": 11,
             "FLR": 25,
-            "CS": 1,
+            "CSI": 10,  # С правками - 10, без - 32
+            "POK": 9,
+            "DELAY": 54,  # Используется время доработки
             "Sales": 0,
-            "Delay": 0,
-            "OK": 0,
-            "POK": 0,
-            "GOK": 0,
         },
     }
 
     def __init__(self, session):
         super().__init__(session)
         self.service_url = "ure"
+
+    def _get_report_model(self, report_type: str) -> type[KPIDataRecord]:
+        """Get the appropriate Pydantic model for the report type."""
+        report_models = {
+            "AHT": AHTDataRecord,
+            "FLR": FLRDataRecord,
+            "CSI": CSIDataRecord,
+            "POK": POKDataRecord,
+            "DELAY": DelayDataRecord,
+            "Sales": SalesDataRecord,
+        }
+        return report_models.get(report_type, GenericKPIDataRecord)
+
+    def _parse_response(self, data: dict, report_type: str) -> TypedKPIResponse | None:
+        """Parse API response data into typed KPI response."""
+        if not data:
+            return None
+
+        try:
+            # First, parse as generic response
+            kpi_response = KPIResponse(**data)
+
+            # Get the appropriate model for data records
+            model_class = self._get_report_model(report_type)
+
+            # Parse each data record with the appropriate model
+            typed_data = []
+            for record in kpi_response.data:
+                try:
+                    typed_record = model_class(**record)
+                    typed_data.append(typed_record)
+                except Exception as e:
+                    logger.warning(
+                        f"Error parsing record with {model_class.__name__}: {e}"
+                    )
+                    # Fallback to generic model
+                    typed_record = GenericKPIDataRecord(**record)
+                    typed_data.append(typed_record)
+
+            # Return typed response
+            return TypedKPIResponse(
+                data=typed_data,
+                headers=kpi_response.headers,
+                metricsHref=kpi_response.metrics_href,
+            )
+        except Exception as e:
+            logger.error(f"Error parsing KPI response: {e}")
+            return None
 
     async def get_report(
         self,
@@ -56,7 +114,22 @@ class KpiAPI(BaseAPI):
         heads=None,
         employees=None,
         report_type: int = 1,
-    ):
+    ) -> dict | None:
+        """Основной метод получения показателей из отчетов.
+
+        Args:
+            units: Список направлений
+            start_date: Дата начала отчета
+            stop_date: Дата конца отчета
+            report: Отчет
+            subdivisions: Список подразделений
+            heads: Список руководителей
+            employees: Список сотрудников
+            report_type: Тип отчета (всегда 1)
+
+        Returns:
+            Словарь с полученными данными из отчета
+        """
         if employees is None:
             employees = []
         if heads is None:
@@ -84,18 +157,24 @@ class KpiAPI(BaseAPI):
             data = await response.json()
             return data
         except Exception as e:
-            print("Parsing error:", e)
+            logger.error(f"Parsing error: {e}")
             return None
 
-    async def _get_flr(self): ...
+    async def get_period_kpi(
+        self, division: str, report: str, days: int
+    ) -> TypedKPIResponse | None:
+        """Базовый метод получения KPI за любой период.
 
-    async def get_day_kpi(
-        self,
-        division: str,
-        report: str,
-    ):
+        Args:
+            division: Направление специалиста
+            report: Тип отчета
+            days: Дней с текущего дня
+
+        Returns:
+            Типизированный отчет
+        """
         stop_date = datetime.today()
-        start_date = stop_date - timedelta(days=1)
+        start_date = stop_date - timedelta(days=days)
 
         # Get units and report ID from class attributes
         units = self.unites.get(division)
@@ -104,48 +183,48 @@ class KpiAPI(BaseAPI):
         if not units or not report_id:
             return None
 
-        day_kpi = await self.get_report(
+        kpi_data = await self.get_report(
             units=units,
-            start_date=start_date.strftime("%Y-%m-%d"),
-            stop_date=stop_date.strftime("%Y-%m-%d"),
+            start_date=start_date.strftime(time_format),
+            stop_date=stop_date.strftime(time_format),
             report=report_id,
         )
-        return day_kpi
+        return self._parse_response(kpi_data, report)
 
-    async def get_week_kpi(self, division: str, report: str):
-        stop_date = datetime.today()
-        start_date = stop_date - timedelta(days=7)
+    async def get_day_kpi(self, division: str, report: str) -> TypedKPIResponse | None:
+        """Получает показатели за последний день.
 
-        # Get units and report ID from class attributes
-        units = self.unites.get(division)
-        report_id = self.reports.get(division, {}).get(report)
+        Args:
+            division: Направление специалиста
+            report: Тип отчета
 
-        if not units or not report_id:
-            return None
+        Returns:
+            Показатели за последний день
+        """
+        return await self.get_period_kpi(division, report, 1)
 
-        week_kpi = await self.get_report(
-            units=units,
-            start_date=start_date.strftime("%Y-%m-%d"),
-            stop_date=stop_date.strftime("%Y-%m-%d"),
-            report=report_id,
-        )
-        return week_kpi
+    async def get_week_kpi(self, division: str, report: str) -> TypedKPIResponse | None:
+        """Получает показатели за последние 7 дней.
 
-    async def get_month_kpi(self, division: str, report: str):
-        stop_date = datetime.today()
-        start_date = stop_date - timedelta(days=31)
+        Args:
+            division: Направление специалиста
+            report: Тип отчета
 
-        # Get units and report ID from class attributes
-        units = self.unites.get(division)
-        report_id = self.reports.get(division, {}).get(report)
+        Returns:
+            Показатели за последнюю неделю
+        """
+        return await self.get_period_kpi(division, report, 7)
 
-        if not units or not report_id:
-            return None
+    async def get_month_kpi(
+        self, division: str, report: str
+    ) -> TypedKPIResponse | None:
+        """Получает показатели за последние 31 дней.
 
-        month_kpi = await self.get_report(
-            units=units,
-            start_date=start_date.strftime("%Y-%m-%d"),
-            stop_date=stop_date.strftime("%Y-%m-%d"),
-            report=report_id,
-        )
-        return month_kpi
+        Args:
+            division: Направление специалиста
+            report: Тип отчета
+
+        Returns:
+            Показатели за последний месяц
+        """
+        return await self.get_period_kpi(division, report, 31)
