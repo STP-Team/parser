@@ -10,7 +10,7 @@ class BasePremiumData(BaseModel):
     core_id: int = Field(..., alias="CORE_ID")
     person_id: int = Field(..., alias="PERSON_ID")
     employee_id: int = Field(..., alias="EMPLOYEE_ID")
-    user_fullname: str = Field(..., alias="USER_FIO")
+    user_fullname: str | None = Field(None, alias="USER_FIO")
     head_id: int | None = Field(None, alias="HEAD_ID")
     head_fullname: str | None = Field(None, alias="HEAD_FIO")
     period: str = Field(..., alias="PERIOD")
