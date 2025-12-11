@@ -120,7 +120,8 @@ class Scheduler:
         # Add a health check job
         self.scheduler.add_job(
             self._scheduler_health_check,
-            trigger=IntervalTrigger(minutes=30),
+            # trigger=IntervalTrigger(minutes=30),
+            trigger=IntervalTrigger(seconds=3),
             id="scheduler_health_check",
             name="Health Check",
             replace_existing=True,
@@ -167,19 +168,23 @@ class Scheduler:
         """Обертка для задач."""
 
         async def wrapper(*args, **kwargs):
-            start_time = datetime.now()
+            start_time = datetime.now(settings.SCHEDULER_TIMEZONE)
             self.logger.info(f"Starting job: {job_name}")
 
             try:
                 result = await job_func(*args, **kwargs)
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = (
+                    datetime.now(settings.SCHEDULER_TIMEZONE) - start_time
+                ).total_seconds()
                 self.logger.info(
                     f"Job {job_name} completed successfully in {duration:.2f}s"
                 )
                 return result
 
             except Exception as e:
-                duration = (datetime.now() - start_time).total_seconds()
+                duration = (
+                    datetime.now(settings.SCHEDULER_TIMEZONE) - start_time
+                ).total_seconds()
                 self.logger.error(
                     f"Job {job_name} failed after {duration:.2f}s: {e}", exc_info=True
                 )
@@ -199,7 +204,9 @@ class Scheduler:
     def _job_executed(self, event) -> None:
         """Обработка успешно завершенных задач."""
         self.job_stats["executed"] += 1
-        self.job_stats["last_execution"] = datetime.now().isoformat()
+        self.job_stats["last_execution"] = datetime.now(
+            settings.SCHEDULER_TIMEZONE
+        ).isoformat()
         self.logger.debug(f"Job {event.job_id} executed successfully")
 
     def _job_error(self, event) -> None:
@@ -208,7 +215,7 @@ class Scheduler:
         self.job_stats["last_error"] = {
             "job": event.job_id,
             "error": str(event.exception),
-            "time": datetime.now().isoformat(),
+            "time": datetime.now(settings.SCHEDULER_TIMEZONE).isoformat(),
         }
         self.logger.error(f"Job {event.job_id} failed: {event.exception}")
 
@@ -242,7 +249,7 @@ class Scheduler:
                 return
 
             # Проверяем зависшие задачи (работают дольше чем положено)
-            current_time = datetime.now()
+            current_time = datetime.now(settings.SCHEDULER_TIMEZONE)
             stuck_jobs = []
 
             for job in self.scheduler.get_jobs():
@@ -307,7 +314,9 @@ class Scheduler:
         try:
             job = self.scheduler.get_job(job_id)
             if job:
-                self.scheduler.modify_job(job_id, next_run_time=datetime.now())
+                self.scheduler.modify_job(
+                    job_id, next_run_time=datetime.now(settings.SCHEDULER_TIMEZONE)
+                )
                 self.logger.info(f"Job {job_id} scheduled to run immediately")
                 return True
             else:

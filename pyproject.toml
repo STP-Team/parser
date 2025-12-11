@@ -1,7 +1,7 @@
 [project]
 name = "parser"
 version = "0.1.0"
-description = "Парсер "
+description = "Парсер"
 requires-python = ">=3.14"
 dependencies = [
     "aiohttp>=3.13.2",

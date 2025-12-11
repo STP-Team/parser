@@ -1,4 +1,6 @@
+import pytz
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pytz.tzinfo import DstTzInfo
 
 
 class Settings(BaseSettings):
@@ -19,7 +21,7 @@ class Settings(BaseSettings):
     # Настройки планировщика
     SCHEDULER_ENABLE_PERSISTENCE: bool = False
     SCHEDULER_MAX_WORKERS: int = 5
-    SCHEDULER_TIMEZONE: str = "Asia/Yekaterinburg"
+    SCHEDULER_TIMEZONE: DstTzInfo = pytz.timezone("Asia/Yekaterinburg")
     SCHEDULER_JOB_STORE_URL: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
