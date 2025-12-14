@@ -12,8 +12,7 @@ class SlAPI(BaseAPI):
         try:
             data = await response.json()
             return SlRootModel.model_validate(data)
-        except Exception as e:
-            print("Parsing error:", e)
+        except Exception:
             return None
 
     async def get_sl(
@@ -40,6 +39,5 @@ class SlAPI(BaseAPI):
         try:
             data = await response.json()
             return ReportData.model_validate(data)
-        except Exception as e:
-            print("Parsing error:", e)
+        except Exception:
             return None

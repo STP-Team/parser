@@ -1,6 +1,24 @@
 from pydantic import BaseModel, Field
 
 
+class EmployeeUpdateData(BaseModel):
+    """Данные для обновления сотрудника."""
+
+    user_id: int
+    fullname: str
+    birthday: str | None = None
+    employee_id: int | None = None
+    employment_date: str | None = None
+
+
+class EmployeeConfig(BaseModel):
+    """Конфигурация для обработки данных сотрудников."""
+
+    update_type: str
+    semaphore_limit: int = 10
+    # filter_func и data_extractor будут переданы как функции отдельно
+
+
 class Employee(BaseModel):
     id: int = Field(alias="id", description="Идентификатор сотрудника")
     fullname: str = Field(alias="name")

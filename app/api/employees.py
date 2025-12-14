@@ -23,8 +23,7 @@ class EmployeesAPI(BaseAPI):
                 employees = [e for e in employees if not e.fired_date]
 
             return employees
-        except Exception as e:
-            print("Parsing error:", e)
+        except Exception:
             return None
 
     async def get_employee(
@@ -60,6 +59,5 @@ class EmployeesAPI(BaseAPI):
             data = await response.json()
             employee = EmployeeData.model_validate(data)
             return employee
-        except Exception as e:
-            print("Parsing error:", e)
+        except Exception:
             return None

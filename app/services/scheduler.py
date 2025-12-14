@@ -7,14 +7,13 @@ from typing import Any
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.api.employees import EmployeesAPI
 from app.api.kpi import KpiAPI
 from app.api.premium import PremiumAPI
 from app.core.config import settings
-from app.tasks.employees import fill_birthdays
+from app.tasks.employees import fill_birthdays, fill_employment_dates
 from app.tasks.kpi import fill_kpi
 from app.tasks.premium import fill_heads_premium, fill_specialists_premium
 
@@ -117,7 +116,6 @@ class Scheduler:
         await self._setup_kpi()
         await self._setup_premium()
 
-        # Add a health check job
         self.scheduler.add_job(
             self._scheduler_health_check,
             trigger=IntervalTrigger(minutes=30),
@@ -127,16 +125,35 @@ class Scheduler:
         )
 
     async def _setup_employees(self) -> None:
-        """Настройка задач, связанных c сотрудниками."""
+        """Настройка задач, связанных с сотрудниками."""
+        self.scheduler.add_job(
+            self._safe_job_wrapper(fill_birthdays, "employees_ids"),
+            trigger=IntervalTrigger(hours=2),
+            args=[self.employees_api],
+            id="employees_ids",
+            name="Заполнение идентификатора OKC",
+            replace_existing=True,
+        )
+
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_birthdays, "employees_birthdays"),
-            trigger=CronTrigger(hour=12, minute=0),
+            trigger=IntervalTrigger(hours=2),
             args=[self.employees_api],
             id="employees_birthdays",
             name="Заполнение дней рождений",
             replace_existing=True,
         )
-        self.logger.info("Employee jobs configured")
+
+        self.scheduler.add_job(
+            self._safe_job_wrapper(fill_employment_dates, "employees_employment_dates"),
+            trigger=IntervalTrigger(hours=2),
+            args=[self.employees_api],
+            id="employees_employment_dates",
+            name="Заполнение дат трудоустройства",
+            replace_existing=True,
+        )
+
+        self.logger.info("[Планировщик] Задачи сотрудников настроены")
 
     async def _setup_kpi(self) -> None:
         """Настройка задач, связанных с показателями KPI."""
@@ -149,13 +166,13 @@ class Scheduler:
             replace_existing=True,
         )
 
-        self.logger.info("KPI jobs configured")
+        self.logger.info("[Планировщик] Задачи KPI настроены")
 
     async def _setup_premium(self) -> None:
         """Настройка задач, связанных с премиумом."""
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_specialists_premium, "premium_specialists"),
-            trigger=IntervalTrigger(hours=1),
+            trigger=IntervalTrigger(minutes=15),
             args=[self.premium_api],
             id="premium_specialists",
             name="Заполнение премиума специалистов",
@@ -163,13 +180,13 @@ class Scheduler:
         )
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_heads_premium, "premium_heads"),
-            trigger=IntervalTrigger(hours=1),
+            trigger=IntervalTrigger(minutes=15),
             args=[self.premium_api],
             id="premium_heads",
             name="Заполнение премиума руководителей",
             replace_existing=True,
         )
-        self.logger.info("Premium jobs configured")
+        self.logger.info("[Планировщик] Задачи премиума настроены")
 
     def _safe_job_wrapper(self, job_func, job_name: str):
         """Обертка для задач."""

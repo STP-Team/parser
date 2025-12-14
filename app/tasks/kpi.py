@@ -1,8 +1,17 @@
+"""
+Модуль для заполнения и обновления данных KPI.
+
+Оптимизированная версия с улучшенной архитектурой:
+- Использует базовые классы для общей функциональности
+- Поддерживает обработку KPI за день, неделю и месяц
+- Эффективная параллельная обработка API запросов
+- Агрегация данных по сотрудникам и улучшенные операции БД
+"""
+
 import asyncio
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from time import perf_counter
 from typing import Any
 
 from sqlalchemy import Delete
@@ -12,268 +21,298 @@ from stp_database.models.KPI import SpecDayKPI, SpecMonthKPI, SpecWeekKPI
 from app.api.kpi import KpiAPI
 from app.core.db import get_stats_session
 from app.services.helpers import get_current_month_first_day
+from app.tasks.base import (
+    APIProcessor,
+    BatchDBOperator,
+    ConcurrentAPIFetcher,
+    log_processing_time,
+)
 
 logger = logging.getLogger(__name__)
 
+# Type definitions
 DBModel = SpecDayKPI | SpecMonthKPI | SpecWeekKPI
 
 
 @dataclass
-class KPIConfig:
-    """Configuration for KPI data processing."""
+class KPIProcessingConfig:
+    """Конфигурация для обработки данных KPI."""
 
+    update_type: str
     divisions: list[str]
     report_types: list[str]
     db_model_class: type[DBModel]
     period_days: int
     table_name: str
     delete_func: Callable[[AsyncSession], Any]
+    semaphore_limit: int = 10
+
+    def get_delete_func(self):
+        return self.delete_func
 
 
-async def _delete_old_kpi_data(
-    session: AsyncSession, model_class: type[DBModel]
-) -> None:
-    """Универсальная функция удаления всех данных KPI."""
-    query = Delete(model_class)
-    await session.execute(query)
+class KPIDataAggregator:
+    """Агрегатор данных KPI для объединения показателей по сотрудникам."""
 
+    def __init__(self, model_class: type[DBModel]):
+        self.model_class = model_class
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-async def delete_old_day_data(session: AsyncSession) -> None:
-    """Удаляет все данные SpecDayKPI."""
-    await _delete_old_kpi_data(session, SpecDayKPI)
+    def aggregate_results(
+        self, results: list[tuple[Any, ...]], extraction_period=None
+    ) -> list[DBModel]:
+        """
+        Агрегирует результаты API по сотрудникам.
 
+        Args:
+            results: Список результатов API
+            extraction_period: Период извлечения данных
 
-async def delete_old_week_data(session: AsyncSession) -> None:
-    """Удаляет все данные SpecWeekKPI."""
-    await _delete_old_kpi_data(session, SpecWeekKPI)
+        Returns:
+            Список агрегированных моделей KPI
+        """
+        if extraction_period is None:
+            extraction_period = get_current_month_first_day()
 
+        # Словарь для хранения ORM объектов по fullname
+        kpi_objects_by_fullname = {}
+        total_processed_rows = 0
 
-async def delete_old_month_data(session: AsyncSession) -> None:
-    """Удаляет все данные SpecMonthKPI."""
-    await _delete_old_kpi_data(session, SpecMonthKPI)
-
-
-async def _bulk_insert_kpi_data(
-    kpi_list: list[DBModel],
-    model_name: str,
-    delete_func: Callable[[AsyncSession], Any],
-) -> None:
-    """Универсальная функция для массовой вставки данных KPI.
-
-    Args:
-        kpi_list: Список объектов модели KPI
-        model_name: Название модели для логирования
-        delete_func: Функция для удаления старых данных
-    """
-    if not kpi_list:
-        logger.warning(f"[KPI] Нет данных в {model_name} для сохранения")
-        return
-
-    try:
-        async with get_stats_session() as session:
-            # Удаляем все старые данные
-            await delete_func(session)
-
-            # Вставляем записи одной операцией
-            session.add_all(kpi_list)
-
-            await session.commit()
-
-            logger.info(
-                f"[KPI] Успешно сохранено {len(kpi_list)} записей в {model_name}"
-            )
-
-    except Exception as e:
-        logger.error(
-            f"Database error while inserting {model_name} KPI data: {type(e).__name__}: {e}"
-        )
-        logger.error(
-            f"Failed to insert {len(kpi_list)} {model_name} records due to database error"
-        )
-        raise
-
-
-async def _fetch_kpi_data_for_divisions(
-    api: KpiAPI, divisions: list[str], report_types: list[str], days: int
-) -> list[tuple[str, str, Any]]:
-    """Получает данные KPI для списка подразделений и типов отчетов параллельно.
-
-    Args:
-        api: Экземпляр API
-        divisions: Список подразделений
-        report_types: Список типов отчетов
-        days: Количество дней для периода
-
-    Returns:
-        Список кортежей (division, report_type, result) с результатами API
-    """
-    # Создаем параллельные задачи для всех подразделений и типов отчетов
-    tasks = []
-    for division in divisions:
-        for report_type in report_types:
-            coro = api.get_period_kpi(division=division, report=report_type, days=days)
-            tasks.append((division, report_type, coro))
-
-    # Выполняем вызовы API одновременно
-    results = await asyncio.gather(*(t[2] for t in tasks), return_exceptions=True)
-
-    # Обрабатываем ошибки
-    processed_results = []
-    for i, result in enumerate(results):
-        division, report_type = tasks[i][0], tasks[i][1]
-        if isinstance(result, Exception):
-            logger.error(
-                f"Error getting KPI for division {division}, report {report_type}: {result}"
-            )
-            processed_results.append((division, report_type, None))
-        else:
-            processed_results.append((division, report_type, result))
-
-    return processed_results
-
-
-def _process_api_response_to_models(
-    results: list[tuple[str, str, Any]],
-    model_class: type[DBModel],
-) -> list[DBModel]:
-    """Обрабатывает результаты API и конвертирует их в модели БД.
-
-    Args:
-        results: Список результатов API
-        model_class: Класс модели БД для создания объектов
-
-    Returns:
-        Список моделей БД
-    """
-    # Получаем период извлечения - первое число текущего месяца
-    extraction_period = get_current_month_first_day()
-
-    # Словарь для хранения ORM объектов по fullname
-    kpi_objects_by_fullname = {}
-    total_processed_rows = 0
-
-    try:
-        for division, report_type, result in results:
-            if not result or not result.data:
-                logger.warning(
-                    f"[KPI] Не найдено показателей для направления: {division}, отчет: {report_type}"
-                )
-                continue
-
-            for row in result.data:
-                fullname = getattr(row, "fullname", None)
-                if not fullname:
+        try:
+            for result in results:
+                if isinstance(result, Exception):
                     continue
 
-                # Получаем или создаем объект KPI для данного fullname
-                if fullname not in kpi_objects_by_fullname:
-                    kpi_obj = model_class()
-                    kpi_obj.fullname = fullname
-                    kpi_obj.extraction_period = extraction_period
-                    kpi_objects_by_fullname[fullname] = kpi_obj
-                else:
-                    kpi_obj = kpi_objects_by_fullname[fullname]
+                division, report_type, api_result = result[1]
 
-                # Обновляем показатели в зависимости от типа отчета
-                if report_type.lower() == "aht" and row.aht:
-                    kpi_obj.contacts_count = row.aht_total_contacts
-                    kpi_obj.aht = row.aht
-                    kpi_obj.aht_chats_web = row.aht_chats_web
-                    kpi_obj.aht_chats_dhcp = row.aht_chats_dhcp
-                    kpi_obj.aht_chats_mobile = row.aht_chats_mobile
-                    kpi_obj.aht_chats_smartdom = row.aht_chats_smartdom
-                elif report_type.lower() == "flr" and row.flr:
-                    kpi_obj.flr = row.flr
-                    kpi_obj.flr_services = row.flr_services
-                    kpi_obj.flr_services_cross = row.flr_services_cross
-                    kpi_obj.flr_services_transfer = row.flr_services_transfers
-                elif report_type.lower() == "csi" and row.csi:
-                    kpi_obj.csi = row.csi
-                elif report_type.lower() == "pok" and row.pok:
-                    kpi_obj.pok = row.pok
-                    kpi_obj.pok_rated_contacts = row.pok_rated_contacts
-                elif report_type.lower() == "delay" and row.delay:
-                    kpi_obj.delay = row.delay
-                elif report_type.lower() == "sales":
-                    kpi_obj.sales = row.sales
-                    kpi_obj.sales_videos = row.sales_videos
-                    kpi_obj.sales_routers = row.sales_routers
-                    kpi_obj.sales_tvs = row.sales_tvs
-                    kpi_obj.sales_intercoms = row.sales_intercoms
-                    kpi_obj.sales_conversion = row.sales_conversion
-                elif report_type.lower() == "salespotential":
-                    kpi_obj.sales_potential = row.sales_potential
-                    kpi_obj.sales_potential_video = row.sales_potential_video
-                    kpi_obj.sales_potential_routers = row.sales_potential_routers
-                    kpi_obj.sales_potential_tvs = row.sales_potential_tvs
-                    kpi_obj.sales_potential_intercoms = row.sales_potential_intercoms
-                    kpi_obj.sales_potential_conversion = row.sales_potential_conversion
-                elif report_type.lower() == "paidservice":
-                    kpi_obj.services = row.services
-                    kpi_obj.services_remote = row.services_remote
-                    kpi_obj.services_onsite = row.services_onsite
-                    kpi_obj.services_conversion = row.services_conversion
+                if (
+                    not api_result
+                    or not hasattr(api_result, "data")
+                    or not api_result.data
+                ):
+                    self.logger.warning(
+                        f"Не найдено показателей для направления: {division}, отчет: {report_type}"
+                    )
+                    continue
 
-                total_processed_rows += 1
-    except Exception as e:
-        logging.error("Произошла ошибка при сохранении показателей: " + str(e))
-    logger.debug(
-        f"[KPI] Обработано {total_processed_rows} строк в {len(kpi_objects_by_fullname)}"
-    )
-    return list(kpi_objects_by_fullname.values())
+                for row in api_result.data:
+                    fullname = getattr(row, "fullname", None)
+                    if not fullname:
+                        continue
 
+                    # Получаем или создаем объект KPI для данного fullname
+                    if fullname not in kpi_objects_by_fullname:
+                        kpi_obj = self.model_class()
+                        kpi_obj.fullname = fullname
+                        kpi_obj.extraction_period = extraction_period
+                        kpi_objects_by_fullname[fullname] = kpi_obj
+                    else:
+                        kpi_obj = kpi_objects_by_fullname[fullname]
 
-async def _fill_kpi_for_period(api: KpiAPI, config: KPIConfig) -> None:
-    """Универсальная функция заполнения данных KPI за период.
+                    # Обновляем показатели в зависимости от типа отчета
+                    self._update_kpi_object(kpi_obj, row, report_type)
+                    total_processed_rows += 1
 
-    Args:
-        api: Экземпляр API
-        config: Конфигурация для обработки KPI
-    """
-    timer_start = perf_counter()
-    model_name = config.db_model_class.__name__
-    logger.debug(f"[KPI] Запускаем заполнение {model_name}")
+        except Exception as e:
+            self.logger.error(f"Ошибка при агрегации показателей: {e}")
 
-    # Получаем данные из API
-    results = await _fetch_kpi_data_for_divisions(
-        api, config.divisions, config.report_types, config.period_days
-    )
-
-    logger.debug(f"[KPI] Получено {len(results)} результатов из API для {model_name}")
-
-    # Debug: Count results with actual data
-    results_with_data = [
-        r for r in results if r[2] and hasattr(r[2], "data") and r[2].data
-    ]
-    logger.debug(
-        f"[KPI] Результатов с данными: {len(results_with_data)} из {len(results)}"
-    )
-
-    # Конвертируем в модели БД и агрегируем по fullname
-    kpi_list = _process_api_response_to_models(results, config.db_model_class)
-
-    if not kpi_list:
-        logger.warning(f"Не найдено данных для {model_name}")
-        return
-
-    # Записываем данные в БД
-    try:
-        await _bulk_insert_kpi_data(kpi_list, model_name, config.delete_func)
-        timer_stop = perf_counter()
-        logger.debug(
-            f"[KPI] Успешно заполнили {model_name}, заняло {timer_stop - timer_start:.2f} секунд"
+        self.logger.debug(
+            f"Обработано {total_processed_rows} строк в {len(kpi_objects_by_fullname)} агрегированных записях"
         )
-    except Exception as e:
-        timer_stop = perf_counter()
-        logger.error(
-            f"[KPI] Ошибка заполнения {model_name} из-за доступа к БД, заняло {timer_stop - timer_start:.2f} секунд"
+        return list(kpi_objects_by_fullname.values())
+
+    def _update_kpi_object(self, kpi_obj: DBModel, row: Any, report_type: str) -> None:
+        """Обновляет объект KPI данными из строки API в зависимости от типа отчета."""
+        report_type_lower = report_type.lower()
+
+        if report_type_lower == "aht" and hasattr(row, "aht") and row.aht:
+            self._update_aht_metrics(kpi_obj, row)
+        elif report_type_lower == "flr" and hasattr(row, "flr") and row.flr:
+            self._update_flr_metrics(kpi_obj, row)
+        elif report_type_lower == "csi" and hasattr(row, "csi") and row.csi:
+            kpi_obj.csi = row.csi
+        elif report_type_lower == "pok" and hasattr(row, "pok") and row.pok:
+            self._update_pok_metrics(kpi_obj, row)
+        elif report_type_lower == "delay" and hasattr(row, "delay") and row.delay:
+            kpi_obj.delay = row.delay
+        elif report_type_lower == "sales":
+            self._update_sales_metrics(kpi_obj, row)
+        elif report_type_lower == "salespotential":
+            self._update_sales_potential_metrics(kpi_obj, row)
+        elif report_type_lower == "paidservice":
+            self._update_paid_service_metrics(kpi_obj, row)
+
+    def _update_aht_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики AHT."""
+        kpi_obj.contacts_count = getattr(row, "aht_total_contacts", None)
+        kpi_obj.aht = row.aht
+        kpi_obj.aht_chats_web = getattr(row, "aht_chats_web", None)
+        kpi_obj.aht_chats_dhcp = getattr(row, "aht_chats_dhcp", None)
+        kpi_obj.aht_chats_mobile = getattr(row, "aht_chats_mobile", None)
+        kpi_obj.aht_chats_smartdom = getattr(row, "aht_chats_smartdom", None)
+
+    def _update_flr_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики FLR."""
+        kpi_obj.flr = row.flr
+        kpi_obj.flr_services = getattr(row, "flr_services", None)
+        kpi_obj.flr_services_cross = getattr(row, "flr_services_cross", None)
+        kpi_obj.flr_services_transfer = getattr(row, "flr_services_transfers", None)
+
+    def _update_pok_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики POK."""
+        kpi_obj.pok = row.pok
+        kpi_obj.pok_rated_contacts = getattr(row, "pok_rated_contacts", None)
+
+    def _update_sales_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики продаж."""
+        kpi_obj.sales = getattr(row, "sales", None)
+        kpi_obj.sales_videos = getattr(row, "sales_videos", None)
+        kpi_obj.sales_routers = getattr(row, "sales_routers", None)
+        kpi_obj.sales_tvs = getattr(row, "sales_tvs", None)
+        kpi_obj.sales_intercoms = getattr(row, "sales_intercoms", None)
+        kpi_obj.sales_conversion = getattr(row, "sales_conversion", None)
+
+    def _update_sales_potential_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики потенциала продаж."""
+        kpi_obj.sales_potential = getattr(row, "sales_potential", None)
+        kpi_obj.sales_potential_video = getattr(row, "sales_potential_video", None)
+        kpi_obj.sales_potential_routers = getattr(row, "sales_potential_routers", None)
+        kpi_obj.sales_potential_tvs = getattr(row, "sales_potential_tvs", None)
+        kpi_obj.sales_potential_intercoms = getattr(
+            row, "sales_potential_intercoms", None
         )
-        logger.error(f"[KPI] Детали ошибки БД: {type(e).__name__}: {e}")
-        return
+        kpi_obj.sales_potential_conversion = getattr(
+            row, "sales_potential_conversion", None
+        )
+
+    def _update_paid_service_metrics(self, kpi_obj: DBModel, row: Any) -> None:
+        """Обновляет метрики платных услуг."""
+        kpi_obj.services = getattr(row, "services", None)
+        kpi_obj.services_remote = getattr(row, "services_remote", None)
+        kpi_obj.services_onsite = getattr(row, "services_onsite", None)
+        kpi_obj.services_conversion = getattr(row, "services_conversion", None)
+
+
+class KPIDBManager:
+    """Управление операциями БД для KPI."""
+
+    @staticmethod
+    async def delete_all_kpi_data(
+        session: AsyncSession, model_class: type[DBModel]
+    ) -> None:
+        """Универсальная функция удаления всех данных KPI."""
+        query = Delete(model_class)
+        await session.execute(query)
+
+    @staticmethod
+    async def delete_old_day_data(session: AsyncSession) -> None:
+        """Удаляет все данные SpecDayKPI."""
+        await KPIDBManager.delete_all_kpi_data(session, SpecDayKPI)
+
+    @staticmethod
+    async def delete_old_week_data(session: AsyncSession) -> None:
+        """Удаляет все данные SpecWeekKPI."""
+        await KPIDBManager.delete_all_kpi_data(session, SpecWeekKPI)
+
+    @staticmethod
+    async def delete_old_month_data(session: AsyncSession) -> None:
+        """Удаляет все данные SpecMonthKPI."""
+        await KPIDBManager.delete_all_kpi_data(session, SpecMonthKPI)
+
+
+class KPIProcessor(APIProcessor[DBModel, KPIProcessingConfig]):
+    """Процессор для обработки данных KPI."""
+
+    def __init__(self, api: KpiAPI):
+        super().__init__(api)
+        self.fetcher = ConcurrentAPIFetcher()
+
+    async def fetch_data(
+        self, config: KPIProcessingConfig, **kwargs
+    ) -> list[tuple[Any, ...]]:
+        """Получает данные KPI из API для всех подразделений и типов отчетов."""
+        tasks = []
+        for division in config.divisions:
+            for report_type in config.report_types:
+                tasks.append((division, report_type))
+
+        async def fetch_kpi_for_division_and_report(division, report_type):
+            try:
+                result = await self.api.get_period_kpi(
+                    division=division, report=report_type, days=config.period_days
+                )
+                return division, report_type, result
+            except Exception as e:
+                self.logger.error(
+                    f"Ошибка получения KPI для {division}, отчет {report_type}: {e}"
+                )
+                return division, report_type, None
+
+        return await self.fetcher.fetch_parallel(
+            tasks, fetch_kpi_for_division_and_report
+        )
+
+    def process_results(
+        self, results: list[tuple[Any, ...]], config: KPIProcessingConfig, **kwargs
+    ) -> list[DBModel]:
+        """Обрабатывает результаты API и агрегирует данные по сотрудникам."""
+        self.logger.debug(
+            f"Получено {len(results)} результатов из API для {config.table_name}"
+        )
+
+        # Подсчитываем результаты с данными
+        results_with_data = [
+            r
+            for r in results
+            if not isinstance(r, Exception)
+            and len(r) > 1
+            and r[1][2]
+            and hasattr(r[1][2], "data")
+            and r[1][2].data
+        ]
+        self.logger.debug(
+            f"Результатов с данными: {len(results_with_data)} из {len(results)}"
+        )
+
+        # Агрегируем данные по сотрудникам
+        aggregator = KPIDataAggregator(config.db_model_class)
+        return aggregator.aggregate_results(results)
+
+    async def save_data(
+        self, data: list[DBModel], config: KPIProcessingConfig, **kwargs
+    ) -> int:
+        """Сохраняет данные KPI в БД."""
+        if not data:
+            self.logger.warning(f"Нет данных в {config.table_name} для сохранения")
+            return 0
+
+        try:
+            async with get_stats_session() as session:
+                db_operator = BatchDBOperator(session)
+
+                # Удаляем все старые данные
+                await config.delete_func(session)
+
+                # Вставляем новые данные
+                return await db_operator.bulk_insert_with_cleanup(
+                    data,
+                    None,
+                    config.table_name,  # delete_func=None, так как уже очистили выше
+                )
+
+        except Exception as e:
+            self.logger.error(
+                f"Ошибка БД при вставке данных {config.table_name}: {type(e).__name__}: {e}"
+            )
+            self.logger.error(
+                f"Не удалось вставить {len(data)} записей {config.table_name} из-за ошибки БД"
+            )
+            raise
 
 
 # Конфигурации для разных периодов KPI
-DAY_KPI_CONFIG = KPIConfig(
+DAY_KPI_CONFIG = KPIProcessingConfig(
+    update_type="Дневные KPI",
     divisions=list(KpiAPI.unites.keys()),  # ["НТП1", "НТП2", "НЦК"]
     report_types=[
         "AHT",
@@ -288,10 +327,11 @@ DAY_KPI_CONFIG = KPIConfig(
     db_model_class=SpecDayKPI,
     period_days=1,
     table_name="KpiDay",
-    delete_func=delete_old_day_data,
+    delete_func=KPIDBManager.delete_old_day_data,
 )
 
-WEEK_KPI_CONFIG = KPIConfig(
+WEEK_KPI_CONFIG = KPIProcessingConfig(
+    update_type="Недельные KPI",
     divisions=list(KpiAPI.unites.keys()),  # ["НТП1", "НТП2", "НЦК"]
     report_types=[
         "AHT",
@@ -306,10 +346,11 @@ WEEK_KPI_CONFIG = KPIConfig(
     db_model_class=SpecWeekKPI,
     period_days=7,
     table_name="KpiWeek",
-    delete_func=delete_old_week_data,
+    delete_func=KPIDBManager.delete_old_week_data,
 )
 
-MONTH_KPI_CONFIG = KPIConfig(
+MONTH_KPI_CONFIG = KPIProcessingConfig(
+    update_type="Месячные KPI",
     divisions=list(KpiAPI.unites.keys()),  # ["НТП1", "НТП2", "НЦК"]
     report_types=[
         "AHT",
@@ -324,46 +365,40 @@ MONTH_KPI_CONFIG = KPIConfig(
     db_model_class=SpecMonthKPI,
     period_days=31,
     table_name="KpiMonth",
-    delete_func=delete_old_month_data,
+    delete_func=KPIDBManager.delete_old_month_data,
 )
 
 
 # Публичные функции API
+@log_processing_time("заполнение дневных KPI")
 async def fill_day_kpi(api: KpiAPI) -> None:
-    """Заполняет дневную таблицу KPI.
-
-    Args:
-        api: Экземпляр API
-    """
-    await _fill_kpi_for_period(api, DAY_KPI_CONFIG)
+    """Заполняет дневную таблицу KPI."""
+    processor = KPIProcessor(api)
+    await processor.process_with_config(DAY_KPI_CONFIG)
 
 
+@log_processing_time("заполнение недельных KPI")
 async def fill_week_kpi(api: KpiAPI) -> None:
-    """Заполняет недельную таблицу KPI.
-
-    Args:
-        api: Экземпляр API
-    """
-    await _fill_kpi_for_period(api, WEEK_KPI_CONFIG)
+    """Заполняет недельную таблицу KPI."""
+    processor = KPIProcessor(api)
+    await processor.process_with_config(WEEK_KPI_CONFIG)
 
 
+@log_processing_time("заполнение месячных KPI")
 async def fill_month_kpi(api: KpiAPI) -> None:
-    """Заполняет месячную таблицу KPI.
-
-    Args:
-        api: Экземпляр API
-    """
-    await _fill_kpi_for_period(api, MONTH_KPI_CONFIG)
+    """Заполняет месячную таблицу KPI."""
+    processor = KPIProcessor(api)
+    await processor.process_with_config(MONTH_KPI_CONFIG)
 
 
+@log_processing_time("заполнение всех KPI")
 async def fill_kpi(api: KpiAPI) -> None:
-    """Основная функция для вызова в планировщике.
-
-    Args:
-        api: Экземпляр API KPI
     """
-    timer_start = perf_counter()
-    logger.info("[KPI] Получаем показатели")
+    Основная функция для вызова в планировщике.
+
+    Запускает сбор данных для всех периодов параллельно.
+    """
+    logger.info("Получаем показатели KPI")
 
     # Запускаем сбор данных для всех периодов параллельно
     try:
@@ -374,10 +409,5 @@ async def fill_kpi(api: KpiAPI) -> None:
             return_exceptions=True,
         )
     except Exception as e:
-        logger.error(f"[KPI] Ошибка получения KPI: {e}")
+        logger.error(f"Ошибка получения KPI: {e}")
         raise
-
-    timer_stop = perf_counter()
-    logger.info(
-        f"[KPI] Сбор KPI завершен, это заняло {timer_stop - timer_start:.2f} секунд"
-    )
