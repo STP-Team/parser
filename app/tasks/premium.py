@@ -12,7 +12,6 @@ from stp_database.models.Stats import HeadPremium, SpecPremium
 from app.api.premium import PremiumAPI
 from app.core.db import get_stats_session
 from app.services.constants import unites
-from app.services.helpers import get_current_month_first_day
 from app.tasks.base import (
     APIProcessor,
     BatchDBOperator,
@@ -199,9 +198,9 @@ class PremiumProcessor(APIProcessor[DBModel, PremiumProcessingConfig]):
     async def fetch_data(
         self, config: PremiumProcessingConfig, periods: list[str] = None, **kwargs
     ) -> list[tuple[Any, ...]]:
-        """Получает данные премий из API для указанных периодов."""
+        """Получает данные премий из API для указанных периодов. Если периоды не указаны, используются последние 2 месяца."""
         if not periods:
-            periods = [get_current_month_first_day().strftime("%d.%m.%Y")]
+            periods = PeriodManager.generate_last_n_months_periods(2)
 
         tasks = []
         for period in periods:
@@ -304,13 +303,11 @@ async def fill_specialists_premium(api: PremiumAPI, period: str | None = None) -
 
     Args:
         api: Экземпляр API
-        period: Период в формате "dd.mm.yyyy". Если не указан, используется текущий месяц.
+        period: Период в формате "dd.mm.yyyy". Если не указан, используются последние 2 месяца.
     """
     processor = PremiumProcessor(api)
 
-    periods = (
-        [period] if period else [get_current_month_first_day().strftime("%d.%m.%Y")]
-    )
+    periods = [period] if period else PeriodManager.generate_last_n_months_periods(2)
 
     await processor.process_with_config(SPECIALIST_PREMIUM_CONFIG, periods=periods)
 
@@ -322,13 +319,11 @@ async def fill_heads_premium(api: PremiumAPI, period: str | None = None) -> None
 
     Args:
         api: Экземпляр API
-        period: Период в формате "dd.mm.yyyy". Если не указан, используется текущий месяц.
+        period: Период в формате "dd.mm.yyyy". Если не указан, используются последние 2 месяца.
     """
     processor = PremiumProcessor(api)
 
-    periods = (
-        [period] if period else [get_current_month_first_day().strftime("%d.%m.%Y")]
-    )
+    periods = [period] if period else PeriodManager.generate_last_n_months_periods(2)
 
     await processor.process_with_config(HEAD_PREMIUM_CONFIG, periods=periods)
 

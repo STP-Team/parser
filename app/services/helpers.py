@@ -82,7 +82,7 @@ def get_month_period_for_kpi() -> datetime:
                 hour=0,
                 minute=0,
                 second=0,
-                microsecond=0
+                microsecond=0,
             )
     else:
         # С 4-го числа парсим текущий месяц

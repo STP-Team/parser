@@ -6,7 +6,6 @@ from aiohttp import ClientSession
 from app.api.employees import EmployeesAPI
 from app.api.kpi import KpiAPI
 from app.api.premium import PremiumAPI
-from app.api.sl import SlAPI
 from app.core.auth import authenticate
 from app.core.config import settings
 from app.services.logger import setup_logging
@@ -38,7 +37,7 @@ async def main():
         employees_api = EmployeesAPI(session)
         kpi_api = KpiAPI(session)
         premium_api = PremiumAPI(session)
-        sl_api = SlAPI(session)
+        # sl_api = SlAPI(session)
 
         db_url = None
         if settings.SCHEDULER_ENABLE_PERSISTENCE and settings.SCHEDULER_JOB_STORE_URL:

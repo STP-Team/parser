@@ -22,8 +22,6 @@ from stp_database.models.Stats import SpecDayKPI, SpecMonthKPI, SpecWeekKPI
 from app.api.kpi import KpiAPI
 from app.core.db import get_stats_session
 from app.services.helpers import (
-    calculate_days_in_month_period,
-    calculate_days_in_week_period,
     get_current_month_first_day,
     get_month_period_for_kpi,
     get_week_start_date,
@@ -53,8 +51,12 @@ class KPIProcessingConfig:
     period_days: int | None  # None означает использование кастомных дат
     table_name: str
     delete_func: Callable[[AsyncSession], Any]
-    start_date_func: Callable[[], 'datetime'] | None = None  # Функция для получения начальной даты
-    extraction_period_func: Callable[[], 'datetime'] | None = None  # Функция для получения extraction_period
+    start_date_func: Callable[[], "datetime"] | None = (
+        None  # Функция для получения начальной даты
+    )
+    extraction_period_func: Callable[[], "datetime"] | None = (
+        None  # Функция для получения extraction_period
+    )
     use_custom_dates: bool = False  # Флаг использования кастомных дат
     use_week_period: bool = False  # Флаг для недельного периода
     semaphore_limit: int = 10
@@ -257,7 +259,7 @@ class KPIProcessor(APIProcessor[DBModel, KPIProcessingConfig]):
                         division=division,
                         report=report_type,
                         start_date=start_date,
-                        use_week_period=config.use_week_period
+                        use_week_period=config.use_week_period,
                     )
                 else:
                     # Используем старую логику с количеством дней

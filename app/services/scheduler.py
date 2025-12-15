@@ -182,7 +182,7 @@ class Scheduler:
 
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_week_kpi, "fill_week_kpi"),
-            trigger=CronTrigger(day_of_week='mon', hour=10, minute=0),
+            trigger=CronTrigger(day_of_week="mon", hour=10, minute=0),
             args=[self.kpi_api],
             id="fill_week_kpi",
             name="Заполнение недельных показателей KPI",

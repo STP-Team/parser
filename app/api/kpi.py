@@ -207,7 +207,7 @@ class KpiAPI(BaseAPI):
         report: str,
         start_date: datetime,
         end_date: datetime | None = None,
-        use_week_period: bool = False
+        use_week_period: bool = False,
     ) -> TypedKPIResponse | None:
         """Получает KPI за кастомный период.
 
@@ -225,6 +225,7 @@ class KpiAPI(BaseAPI):
             if use_week_period:
                 # Для недельных данных используем конец недели
                 from app.services.helpers import get_week_end_date
+
                 end_date = get_week_end_date()
             else:
                 end_date = datetime.now()
