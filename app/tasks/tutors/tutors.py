@@ -55,28 +55,6 @@ async def fill_tutor_schedule(
         raise
 
 
-@log_processing_time("полное заполнение расписания наставников")
-async def fill_full_tutor_schedule(api: TutorsAPI) -> int:
-    """
-    Заполняет полное расписание наставников за последние 6 месяцев.
-
-    Returns:
-        int: Количество обработанных записей
-    """
-    return await fill_tutor_schedule(api, full_update=True)
-
-
-@log_processing_time("обновление расписания наставников")
-async def fill_tutor_schedule(api: TutorsAPI) -> int:
-    """
-    Обновляет расписание наставников за последние 2 месяца.
-
-    Returns:
-        int: Количество обработанных записей
-    """
-    return await fill_tutor_schedule(api, full_update=False)
-
-
 @log_processing_time("заполнение расписания наставников за указанные периоды")
 async def fill_tutor_schedule_for_periods(
     api: TutorsAPI, periods: list[tuple[str, str]]
