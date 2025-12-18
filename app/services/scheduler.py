@@ -219,28 +219,15 @@ class Scheduler:
 
     async def _setup_tutors(self) -> None:
         """Настройка задач, связанных с расписанием наставников."""
-        # Инкрементальное обновление каждые 5 минут (только последние 2 месяца)
         self.scheduler.add_job(
             self._safe_job_wrapper(
                 lambda api: fill_tutor_schedule(api, full_update=False),
-                "tutors_incremental",
+                "tutors",
             ),
             trigger=IntervalTrigger(minutes=5),
             args=[self.tutors_api],
-            id="tutors_incremental",
-            name="Обновление расписания наставников (2 месяца)",
-            replace_existing=True,
-        )
-
-        # Полное обновление раз в день в 3:00 утра (все 6 месяцев)
-        self.scheduler.add_job(
-            self._safe_job_wrapper(
-                lambda api: fill_tutor_schedule(api, full_update=True), "tutors_full"
-            ),
-            trigger=CronTrigger(hour=3, minute=0),
-            args=[self.tutors_api],
-            id="tutors_full",
-            name="Полное обновление расписания наставников (6 месяцев)",
+            id="tutors",
+            name="Обновление расписания наставников",
             replace_existing=True,
         )
 
