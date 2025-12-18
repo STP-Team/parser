@@ -137,6 +137,9 @@ class TutorScheduleDataExtractor:
                         schedule_object.tutor_fullname = safe_get_attr(
                             tutor_info, "full_name"
                         )
+                        schedule_object.tutor_division = safe_get_attr(
+                            tutor_info, "unit"
+                        )
 
                     # Данные стажера с безопасным извлечением
                     schedule_object.trainee_employee_id = safe_get_attr(
