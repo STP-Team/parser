@@ -129,6 +129,7 @@ class EmployeeDataExtractor:
         "birthday": ["birthday"],
         "employment_date": ["employment_date"],
         "employee_id": ["id"],
+        "tutor_info": ["is_tutor", "tutor_type"],
         "all": ["birthday", "employment_date", "id"],
     }
 
@@ -233,6 +234,55 @@ class EmployeeDataExtractor:
             employee_data, db_employee, "all"
         )
 
+    @staticmethod
+    def extract_tutor_data(
+        tutors_data: list[Any], db_employee: Any
+    ) -> EmployeeUpdateData | None:
+        """
+        Извлекает информацию о наставничестве сотрудника.
+
+        Args:
+            tutors_data: Список наставников из API
+            db_employee: Сотрудник из БД
+
+        Returns:
+            EmployeeUpdateData с информацией о наставничестве
+        """
+        update_data = EmployeeDataExtractor._create_base_update_data(db_employee)
+
+        # Ищем сотрудника среди наставников по имени
+        db_fullname = safe_get_attr(db_employee, "fullname", "").strip()
+        if not db_fullname:
+            # Если нет имени, устанавливаем is_tutor = False
+            update_data.is_tutor = False
+            update_data.tutor_type = None
+            return update_data
+
+        # Ищем совпадение по полному имени
+        found_tutor = None
+        for tutor in tutors_data:
+            # Поддерживаем как новый формат (full_name), так и старый (name)
+            tutor_name = (
+                safe_get_attr(tutor, "full_name", "").strip()
+                or safe_get_attr(tutor, "name", "").strip()
+            )
+            if tutor_name and tutor_name == db_fullname:
+                found_tutor = tutor
+                break
+
+        if found_tutor:
+            # Сотрудник является наставником
+            update_data.is_tutor = True
+            update_data.tutor_type = safe_get_attr(
+                found_tutor, "tutor_type", converter=int
+            )
+        else:
+            # Сотрудник не является наставником
+            update_data.is_tutor = False
+            update_data.tutor_type = None
+
+        return update_data
+
 
 class EmployeeProcessor(APIProcessor[EmployeeUpdateData, EmployeeProcessingConfig]):
     """Процессор для обработки данных сотрудников."""
@@ -331,6 +381,10 @@ class EmployeeProcessor(APIProcessor[EmployeeUpdateData, EmployeeProcessingConfi
                     kwargs["employee_id"] = update_data.employee_id
                 if update_data.employment_date is not None:
                     kwargs["employment_date"] = update_data.employment_date
+                if update_data.is_tutor is not None:
+                    kwargs["is_tutor"] = update_data.is_tutor
+                if update_data.tutor_type is not None:
+                    kwargs["tutor_type"] = update_data.tutor_type
 
                 await repo.employee.update_user(**kwargs)
 
@@ -341,6 +395,8 @@ class EmployeeProcessor(APIProcessor[EmployeeUpdateData, EmployeeProcessingConfi
                     "birthday": item.birthday,
                     "employee_id": item.employee_id,
                     "employment_date": item.employment_date,
+                    "is_tutor": item.is_tutor,
+                    "tutor_type": item.tutor_type,
                 }
                 for item in data
             ]

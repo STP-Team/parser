@@ -19,6 +19,7 @@ from app.tasks.employees.employees import (
     fill_birthdays,
     fill_employee_ids,
     fill_employment_dates,
+    fill_tutors,
 )
 from app.tasks.kpi.kpi import fill_day_kpi, fill_month_kpi, fill_week_kpi
 from app.tasks.premium.premium import fill_heads_premium, fill_specialists_premium
@@ -161,6 +162,15 @@ class Scheduler:
             args=[self.employees_api],
             id="employees_employment_dates",
             name="Заполнение дат трудоустройства",
+            replace_existing=True,
+        )
+
+        self.scheduler.add_job(
+            self._safe_job_wrapper(fill_tutors, "employees_tutors"),
+            trigger=IntervalTrigger(minutes=5),
+            args=[self.tutors_api, self.employees_api],
+            id="employees_tutors",
+            name="Заполнение наставников",
             replace_existing=True,
         )
 

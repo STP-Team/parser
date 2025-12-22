@@ -18,3 +18,10 @@ def filter_missing_any_data(emp) -> bool:
     return (
         not emp.birthday or not emp.employee_id or not emp.employment_date
     ) and emp.user_id
+
+
+def filter_missing_tutor_info(emp) -> bool:
+    """Фильтр для сотрудников без информации о наставничестве."""
+    # Проверяем всех пользователей с user_id, так как нужно обновить информацию о наставничестве
+    # на основе актуальных данных из API за последние 6 месяцев
+    return emp.user_id is not None

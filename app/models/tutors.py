@@ -1,6 +1,51 @@
 from pydantic import BaseModel, Field
 
 
+class TutorFilter(BaseModel):
+    """Фильтр наставника для получения списка всех наставников."""
+
+    id: int = Field(alias="id", description="Идентификатор наставника")
+    name: str = Field(alias="name", description="Имя наставника")
+    shift_type: int = Field(alias="shiftType", description="Тип смены")
+    tutor_type: int = Field(alias="tutorType", description="Тип наставника")
+    unit: int = Field(alias="unit", description="Подразделение")
+
+
+class Unit(BaseModel):
+    """Подразделение."""
+
+    id: int = Field(alias="id", description="Идентификатор подразделения")
+    name: str = Field(alias="name", description="Название подразделения")
+    division: int = Field(alias="division", description="Дивизион")
+
+
+class ShiftType(BaseModel):
+    """Тип смены."""
+
+    id: int = Field(alias="id", description="Идентификатор типа смены")
+    name: str = Field(alias="name", description="Название типа смены")
+
+
+class TutorType(BaseModel):
+    """Тип наставника."""
+
+    id: int = Field(alias="id", description="Идентификатор типа наставника")
+    name: str = Field(alias="name", description="Название типа наставника")
+
+
+class GraphFiltersResponse(BaseModel):
+    """Ответ API для получения фильтров графика наставников."""
+
+    tutors: list[TutorFilter] = Field(alias="tutors", description="Список наставников")
+    units: list[Unit] = Field(alias="units", description="Список подразделений")
+    shift_types: list[ShiftType] = Field(
+        alias="shiftTypes", description="Список типов смен"
+    )
+    tutor_types: list[TutorType] = Field(
+        alias="tutorTypes", description="Список типов наставников"
+    )
+
+
 class TutorInfo(BaseModel):
     """Информация о наставнике."""
 

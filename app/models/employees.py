@@ -9,6 +9,8 @@ class EmployeeUpdateData(BaseModel):
     birthday: str | None = None
     employee_id: int | None = None
     employment_date: str | None = None
+    is_tutor: bool | None = None
+    tutor_type: int | None = None
 
 
 class EmployeeConfig(BaseModel):

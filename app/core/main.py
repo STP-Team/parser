@@ -12,7 +12,7 @@ from app.core.auth import authenticate
 from app.core.config import settings
 from app.services.logger import setup_logging
 from app.services.scheduler import Scheduler
-from app.tasks.employees.employees import fill_all_employee_data
+from app.tasks.employees.employees import fill_all_employee_data, fill_tutors
 from app.tasks.kpi.kpi import fill_kpi
 from app.tasks.premium.premium import fill_heads_premium, fill_specialists_premium
 from app.tasks.sl.sl import fill_sl
@@ -75,6 +75,7 @@ async def main():
             await fill_kpi(kpi_api)
             await fill_heads_premium(premium_api)
             await fill_specialists_premium(premium_api)
+            await fill_tutors(tutors_api, employees_api)
             await fill_tutor_schedule(tutors_api)
             await fill_sl(sl_api)
             logger.info("Получение данных при старте завершено")

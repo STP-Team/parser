@@ -1,5 +1,5 @@
 from app.api.base import BaseAPI
-from app.models.tutors import TutorGraphResponse
+from app.models.tutors import GraphFiltersResponse, TutorGraphResponse
 
 
 class TutorsAPI(BaseAPI):
@@ -59,5 +59,31 @@ class TutorsAPI(BaseAPI):
             data = await response.json()
             tutor_graph = TutorGraphResponse.model_validate(data)
             return tutor_graph
+        except Exception:
+            return None
+
+    async def get_graph_filters(self, division_id: int) -> GraphFiltersResponse | None:
+        """
+        Get graph filters data including all tutors, units, shift types, and tutor types.
+
+        Returns:
+            GraphFiltersResponse containing lists of tutors, units, shift types, and tutor types
+        """
+        form_data = [("divisionId", str(division_id))]
+
+        # Override headers for form data
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+
+        response = await self.post(
+            f"{self.service_url}/get-graph-filters", data=form_data, headers=headers
+        )
+
+        if response.status != 200:
+            return None
+
+        try:
+            data = await response.json()
+            graph_filters = GraphFiltersResponse.model_validate(data)
+            return graph_filters
         except Exception:
             return None
