@@ -49,6 +49,7 @@ def create_assigned_test_from_api_data(test_data: Any) -> AssignedTest | None:
     try:
         # Извлекаем данные с использованием безопасных методов
         # Конвертируем None в пустые строки для совместимости с базой данных
+        test_id = safe_get_attr(test_data, "id", "") or ""
         test_name = safe_get_attr(test_data, "test_name", "") or ""
         user_name = safe_get_attr(test_data, "user_name", "") or ""
         head_name = safe_get_attr(test_data, "head_name", "") or ""
@@ -66,6 +67,7 @@ def create_assigned_test_from_api_data(test_data: Any) -> AssignedTest | None:
 
         # Создаем объект AssignedTest
         return AssignedTest(
+            test_id=test_id,
             test_name=test_name,
             employee_fullname=user_name,
             head_fullname=head_name,
@@ -138,7 +140,7 @@ def get_default_subdivisions() -> list[int]:
     Returns:
         Список ID подразделений
     """
-    return [16231]
+    return []
 
 
 def format_date_range_for_tests(start_date: str, end_date: str) -> tuple[str, str]:
