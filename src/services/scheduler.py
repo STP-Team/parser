@@ -17,10 +17,10 @@ from src.tasks.employees import (
     fill_employee_ids,
     fill_employment_dates,
 )
-from src.tasks.kpi import fill_day_kpi, fill_month_kpi, fill_week_kpi
 from src.tasks.premium import fill_heads_premium, fill_specialists_premium
 from src.tasks.tests import fill_assigned_tests
 from src.tasks.tutors import fill_tutor_schedule
+from src.tasks.ure import fill_day_kpi, fill_month_kpi, fill_week_kpi
 
 
 class Scheduler:
@@ -157,15 +157,6 @@ class Scheduler:
             args=[self.okc_client.dossier],
             id="employees_employment_dates",
             name="Заполнение дат трудоустройства",
-            replace_existing=True,
-        )
-
-        self.scheduler.add_job(
-            self._safe_job_wrapper(fill_tutor_schedule, "employees_tutors"),
-            trigger=IntervalTrigger(minutes=5),
-            args=[self.okc_client.tutors, self.okc_client.dossier],
-            id="employees_tutors",
-            name="Заполнение наставников",
             replace_existing=True,
         )
 

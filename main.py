@@ -10,11 +10,11 @@ from src.core.nats_router import setup_nats_router
 from src.services.logger import setup_logging
 from src.services.scheduler import Scheduler
 from src.tasks.employees import fill_all_employee_data
-from src.tasks.kpi import fill_kpi
 from src.tasks.premium import fill_heads_premium, fill_specialists_premium
 from src.tasks.sl import fill_sl
 from src.tasks.tests import fill_assigned_tests
 from src.tasks.tutors import fill_tutor_schedule
+from src.tasks.ure import fill_kpi
 
 logger = logging.getLogger(__name__)
 
