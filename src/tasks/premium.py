@@ -14,10 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 def get_recent_periods(months: int = 6) -> list[str]:
-    """Get recent months as period strings."""
-    recent_months = PeriodHelper.get_previous_months(months_count=months)
+    """Get recent months as period strings (including current month)."""
+    # Get previous months (months_count - 1 to leave room for current month)
+    previous_months = PeriodHelper.get_previous_months(months_count=months - 1)
+
+    # Add current month
+    from datetime import date
+    current_month = date.today().strftime("%Y-%m")
+    all_months = [current_month] + previous_months
+
     periods = []
-    for month_str in recent_months:
+    for month_str in all_months:
         start_date, _ = PeriodHelper.parse_period_string(month_str)
         period = PeriodHelper.format_date_for_api(start_date, "DD.MM.YYYY")
         periods.append(period)
