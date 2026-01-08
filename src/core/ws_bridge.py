@@ -47,12 +47,19 @@ class WebSocketBridge:
         # Get the line object from okc_client
         try:
             self.line = getattr(self.okc_client.ws.lines, self.line_name)
+            logger.info(f"Got line object for {self.line_name}, calling connect...")
         except AttributeError:
             logger.error(
                 f"Invalid line name: {self.line_name}. Available: nck, ntp1, ntp2"
             )
             raise
 
+        # Set running flag BEFORE attempting connection
+        self.is_running = True
+
+        # NOTE: Following okc-py official example pattern:
+        # https://github.com/STP-Team/okc-py/blob/main/examples/sockets/lines.py
+        # Handlers are registered AFTER connection to avoid missing initial events
         await self._connect_with_retry()
 
     async def _connect_with_retry(self) -> None:
@@ -64,9 +71,11 @@ class WebSocketBridge:
                 await self.line.connect()
                 logger.info(f"WebSocket connected to line: {self.line_name}")
 
-                # Register event handlers
+                # Register event handlers AFTER connection (following okc-py pattern)
+                # This ensures we catch all events including initial ones
                 self.line.on("rawData", self._on_raw_data)
                 self.line.on("rawIncidents", self._on_raw_incidents)
+                logger.debug(f"Registered event handlers for {self.line_name}")
 
                 self.is_running = True
                 reconnect_attempt = 0  # Reset counter on successful connection
@@ -85,19 +94,19 @@ class WebSocketBridge:
             except Exception as e:
                 reconnect_attempt += 1
                 logger.error(
-                    f"WebSocket connection error (attempt {reconnect_attempt}/{self._max_reconnect_attempts}): {e}"
+                    f"[{self.line_name}] WebSocket connection error (attempt {reconnect_attempt}/{self._max_reconnect_attempts}): {e}"
                 )
 
                 if reconnect_attempt >= self._max_reconnect_attempts:
                     logger.error(
-                        "Max reconnection attempts reached. Stopping WebSocket bridge."
+                        f"[{self.line_name}] Max reconnection attempts reached. Stopping WebSocket bridge."
                     )
                     self.is_running = False
                     break
 
                 # Only reconnect if we're still supposed to be running
                 if self.is_running:
-                    logger.info(f"Reconnecting in {self._reconnect_delay} seconds...")
+                    logger.info(f"[{self.line_name}] Reconnecting in {self._reconnect_delay} seconds...")
                     await asyncio.sleep(self._reconnect_delay)
 
     async def _monitor_connection(self) -> None:
@@ -108,7 +117,7 @@ class WebSocketBridge:
 
                 if not self.line.is_connected:
                     logger.warning(
-                        "WebSocket connection lost, attempting to reconnect..."
+                        f"[{self.line_name}] WebSocket connection lost, attempting to reconnect..."
                     )
                     self.is_running = False
                     break
@@ -118,7 +127,7 @@ class WebSocketBridge:
                 self.is_running = False
                 break
             except Exception as e:
-                logger.error(f"Error monitoring WebSocket connection: {e}")
+                logger.error(f"[{self.line_name}] Error monitoring WebSocket connection: {e}")
                 self.is_running = False
                 break
 
@@ -180,7 +189,7 @@ class WebSocketBridge:
                 logger.warning("NATS client not connected, cannot publish message")
 
         except Exception as e:
-            logger.error(f"Error publishing to NATS: {e}")
+            logger.error(f"[{self.line_name}] Error publishing to NATS: {e}")
 
     def _serialize_raw_data(self, raw_data: RawData) -> dict[str, Any]:
         """Serialize RawData object to dictionary using Pydantic model_dump."""
@@ -228,6 +237,9 @@ class WebSocketBridgeManager:
             # Create task for each bridge
             task = asyncio.create_task(bridge.start())
             self.tasks.append(task)
+
+        # Give tasks time to establish connections
+        await asyncio.sleep(2)
 
         logger.info(f"All {len(self.lines)} WebSocket bridge(s) started")
 
