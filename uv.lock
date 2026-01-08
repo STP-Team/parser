@@ -457,7 +457,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/71/c5/2564d917503fe8d68
 [[package]]
 name = "okc-py"
 version = "1.3.0"
-source = { git = "https://github.com/stp-team/okc-py.git#a2e794d8dc4c5f67d1c1a5870bd625eca0eede17" }
+source = { git = "https://github.com/stp-team/okc-py.git#6a7cbb486d991e5a4aea061f0f3d508fe61db7b6" }
 dependencies = [
     { name = "aiohttp", extra = ["speedups"] },
     { name = "pydantic" },
