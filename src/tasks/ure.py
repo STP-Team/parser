@@ -167,19 +167,10 @@ async def save_kpi_data(data: list, model_class: type[DeclarativeBase]) -> int:
     if not data:
         return 0
 
-    # Collect unique extraction periods for bulk deletion
-    extraction_periods = {kpi.extraction_period for kpi in data}
-
-    # Get the table and column dynamically
-    table = model_class.__table__
-    extraction_period_col = table.c.extraction_period
-
     async with get_stats_session() as session:
-        # Bulk delete for each unique period
-        for period in extraction_periods:
-            await session.execute(
-                delete(model_class).where(extraction_period_col == period)
-            )
+        # Truncate the entire table first
+        await session.execute(delete(model_class))
+        # Insert new data for the period being extracted
         session.add_all(data)
         await session.commit()
 
