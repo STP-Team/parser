@@ -5,6 +5,7 @@ from datetime import datetime
 from okc_py import UreAPI
 from okc_py.api.models.ure import (
     AHTDataRecord,
+    CSATDataRecord,
     CSIDataRecord,
     DelayDataRecord,
     FLRDataRecord,
@@ -36,6 +37,7 @@ REPORT_TYPES = {
     "Sales": SalesDataRecord,
     "SalesPotential": SalesPotentialDataRecord,
     "PaidService": PaidServiceRecord,
+    "CSAT": CSATDataRecord,
 }
 
 
@@ -122,6 +124,11 @@ def aggregate_kpi_data(
                 kpi_obj.services_onsite = record.services_onsite
                 kpi_obj.services_conversion = record.services_conversion
 
+            elif report_type == "CSAT":
+                kpi_obj.csat = record.csat
+                kpi_obj.csat_rated = record.total_rated
+                kpi_obj.csat_high_rated = record.total_high_rated
+
     return list(kpi_by_fullname.values())
 
 
@@ -200,6 +207,7 @@ async def process_kpi(
         "Sales",
         "SalesPotential",
         "PaidService",
+        "CSAT",
     ]
 
     logger.info(

@@ -136,7 +136,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_employee_ids, "employees_ids"),
             trigger=IntervalTrigger(hours=2),
-            args=[self.okc_client.dossier],
+            args=[self.okc_client.api.dossier],
             id="employees_ids",
             name="Заполнение идентификатора OKC",
             replace_existing=True,
@@ -145,7 +145,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_birthdays, "employees_birthdays"),
             trigger=IntervalTrigger(hours=2),
-            args=[self.okc_client.dossier],
+            args=[self.okc_client.api.dossier],
             id="employees_birthdays",
             name="Заполнение дней рождений",
             replace_existing=True,
@@ -154,7 +154,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_employment_dates, "employees_employment_dates"),
             trigger=IntervalTrigger(hours=2),
-            args=[self.okc_client.dossier],
+            args=[self.okc_client.api.dossier],
             id="employees_employment_dates",
             name="Заполнение дат трудоустройства",
             replace_existing=True,
@@ -167,7 +167,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_day_kpi, "fill_day_kpi"),
             trigger=CronTrigger(hour=10, minute=0),
-            args=[self.okc_client.ure],
+            args=[self.okc_client.api.ure],
             id="fill_day_kpi",
             name="Заполнение дневных показателей KPI",
             replace_existing=True,
@@ -176,7 +176,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_week_kpi, "fill_week_kpi"),
             trigger=CronTrigger(day_of_week="mon", hour=10, minute=0),
-            args=[self.okc_client.ure],
+            args=[self.okc_client.api.ure],
             id="fill_week_kpi",
             name="Заполнение недельных показателей KPI",
             replace_existing=True,
@@ -185,7 +185,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_month_kpi, "fill_month_kpi"),
             trigger=CronTrigger(day=4, hour=10, minute=0),
-            args=[self.okc_client.ure],
+            args=[self.okc_client.api.ure],
             id="fill_month_kpi",
             name="Заполнение месячных показателей KPI",
             replace_existing=True,
@@ -198,7 +198,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_specialists_premium, "premium_specialists"),
             trigger=IntervalTrigger(minutes=15),
-            args=[self.okc_client.premium],
+            args=[self.okc_client.api.premium],
             id="premium_specialists",
             name="Заполнение премиума специалистов",
             replace_existing=True,
@@ -206,7 +206,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_heads_premium, "premium_heads"),
             trigger=IntervalTrigger(minutes=15),
-            args=[self.okc_client.premium],
+            args=[self.okc_client.api.premium],
             id="premium_heads",
             name="Заполнение премиума руководителей",
             replace_existing=True,
@@ -221,7 +221,7 @@ class Scheduler:
                 "tutors",
             ),
             trigger=IntervalTrigger(minutes=5),
-            args=[self.okc_client.tutors],
+            args=[self.okc_client.api.tutors],
             id="tutors",
             name="Обновление расписания наставников",
             replace_existing=True,
@@ -234,7 +234,7 @@ class Scheduler:
         self.scheduler.add_job(
             self._safe_job_wrapper(fill_assigned_tests, "tests_current"),
             trigger=IntervalTrigger(minutes=10),
-            args=[self.okc_client.tests],
+            args=[self.okc_client.api.tests],
             id="tests_current",
             name="Заполнение назначенных тестов",
             replace_existing=True,

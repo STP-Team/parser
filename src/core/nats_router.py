@@ -194,8 +194,8 @@ class NATSRouter:
 
     async def _handle_employee_command(
         self,
-        employee_id: int = None,
-        employee_fullname: str = None,
+        employee_id: int | None = None,
+        employee_fullname: str | None = None,
         show_kpi: bool = True,
         show_criticals: bool = True,
     ) -> dict[str, Any]:
@@ -223,12 +223,12 @@ async def setup_nats_router(
 ) -> NATSRouter:
     """Setup and configure NATS router"""
     router = NATSRouter(
-        employees_api=okc_client.dossier,
-        kpi_api=okc_client.ure,
-        premium_api=okc_client.premium,
-        sl_api=okc_client.sl,
-        tutors_api=okc_client.tutors,
-        tests_api=okc_client.tests,
+        employees_api=okc_client.api.dossier,
+        kpi_api=okc_client.api.ure,
+        premium_api=okc_client.api.premium,
+        sl_api=okc_client.api.sl,
+        tutors_api=okc_client.api.tutors,
+        tests_api=okc_client.api.tests,
     )
 
     await router.setup_handlers()

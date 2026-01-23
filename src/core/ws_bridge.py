@@ -106,7 +106,9 @@ class WebSocketBridge:
 
                 # Only reconnect if we're still supposed to be running
                 if self.is_running:
-                    logger.info(f"[{self.line_name}] Reconnecting in {self._reconnect_delay} seconds...")
+                    logger.info(
+                        f"[{self.line_name}] Reconnecting in {self._reconnect_delay} seconds..."
+                    )
                     await asyncio.sleep(self._reconnect_delay)
 
     async def _monitor_connection(self) -> None:
@@ -127,7 +129,9 @@ class WebSocketBridge:
                 self.is_running = False
                 break
             except Exception as e:
-                logger.error(f"[{self.line_name}] Error monitoring WebSocket connection: {e}")
+                logger.error(
+                    f"[{self.line_name}] Error monitoring WebSocket connection: {e}"
+                )
                 self.is_running = False
                 break
 

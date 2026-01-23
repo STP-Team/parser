@@ -81,13 +81,13 @@ async def main():
             if settings.ENVIRONMENT != "dev":
                 # Заполнение данных при старте
                 logger.info("Запуск получения данных при старте парсера...")
-                await fill_employees(okc_client.dossier, okc_client.tutors)
-                await fill_kpi(okc_client.ure)
-                await fill_heads_premium(okc_client.premium)
-                await fill_specialists_premium(okc_client.premium)
-                await fill_tutor_schedule(okc_client.tutors)
-                await fill_sl(okc_client.sl)
-                await fill_assigned_tests(okc_client.tests)
+                await fill_employees(okc_client.api.dossier, okc_client.api.tutors)
+                await fill_kpi(okc_client.api.ure)
+                await fill_heads_premium(okc_client.api.premium)
+                await fill_specialists_premium(okc_client.api.premium)
+                await fill_tutor_schedule(okc_client.api.tutors)
+                await fill_sl(okc_client.api.sl)
+                await fill_assigned_tests(okc_client.api.tests)
                 logger.info("Получение данных при старте завершено")
 
             try:
