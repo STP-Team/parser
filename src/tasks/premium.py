@@ -32,11 +32,6 @@ def get_recent_periods(months: int = 6) -> list[str]:
     return periods
 
 
-def safe_int(value: int | None) -> int | None:
-    """Convert value to int if not None."""
-    return int(value) if value is not None else None
-
-
 def map_premium_row(
     row: SpecialistPremiumData | HeadPremiumData, is_head: bool
 ) -> SpecPremium | HeadPremium:
@@ -45,46 +40,47 @@ def map_premium_row(
     premium.extraction_period = datetime.strptime(row.period, "%d.%m.%Y")
     premium.employee_id = row.employee_id
 
-    # Common fields
-    premium.flr = row.flr
-    premium.flr_normative = row.flr_normative
-    premium.flr_normative_rate = row.flr_normative_rate
-    premium.flr_premium = row.flr_premium
+    # Common fields: GOK
     premium.gok = row.gok
     premium.gok_normative = row.gok_normative
+    premium.gok_pers_normative = row.gok_pers_normative
     premium.gok_normative_rate = row.gok_normative_rate
     premium.gok_premium = row.gok_premium
-    premium.target = row.target
-    premium.target_type = row.target_type
-    premium.target_normative_first = row.target_normative_first
-    premium.target_normative_second = row.target_normative_second
-    premium.target_normative_rate_first = row.target_normative_rate_first
-    premium.target_normative_rate_second = row.target_normative_rate_second
-    premium.target_premium = row.target_premium
-    premium.pers_target_manual = row.pers_target_manual
-    premium.head_adjust_premium = row.head_adjust_premium
-    premium.total_premium = safe_int(row.total_premium)
+
+    # Common fields: total premium
+    premium.total_premium = row.total_premium
 
     if is_head:
-        premium.sl = row.sl
-        premium.sl_normative_first = row.sl_normative_first
-        premium.sl_normative_second = row.sl_normative_second
-        premium.sl_normative_rate_first = row.sl_normative_rate_first
-        premium.sl_normative_rate_second = row.sl_normative_rate_second
-        premium.sl_premium = row.sl_premium
+        # FLR fields for heads
+        premium.flr = row.flr
+        premium.flr_normative = row.flr_normative
+        premium.flr_pers_normative = row.flr_pers_normative
+        premium.flr_normative_rate = row.flr_normative_rate
+        premium.flr_premium = row.flr_premium
+
+        # AHT fields for heads
+        premium.aht = row.aht
+        premium.aht_normative = row.aht_normative
+        premium.aht_pers_normative = row.aht_pers_normative
+        premium.aht_normative_rate = row.aht_normative_rate
+        premium.aht_premium = row.aht_premium
     else:
-        premium.contacts_count = row.total_contacts
-        premium.csi = row.csi
-        premium.csi_normative = row.csi_normative
-        premium.csi_normative_rate = row.csi_normative_rate
-        premium.csi_premium = row.csi_premium
-        premium.csi_response = row.csi_response
-        premium.csi_response_normative = row.csi_response_normative
-        premium.csi_response_normative_rate = row.csi_response_normative_rate
-        premium.discipline_premium = row.discipline_premium
-        premium.tests_premium = row.tests_premium
-        premium.thanks_premium = row.thanks_premium
-        premium.tutors_premium = safe_int(row.tutors_premium)
+        # Contacts count for specialists
+        premium.contacts_count = row.total_chats
+
+        # CSAT fields for specialists
+        premium.csat = row.csat
+        premium.csat_normative = row.csat_normative
+        premium.csat_pers_normative = row.csat_pers_normative
+        premium.csat_normative_rate = row.csat_normative_rate
+        premium.csat_premium = row.csat_premium
+
+        # AHT fields for specialists
+        premium.aht = row.aht
+        premium.aht_normative = row.aht_normative
+        premium.aht_pers_normative = row.aht_pers_normative
+        premium.aht_normative_rate = row.aht_normative_rate
+        premium.aht_premium = row.aht_premium
 
     return premium
 
