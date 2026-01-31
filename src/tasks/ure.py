@@ -1,9 +1,10 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from okc_py import UreAPI
+from okc_py.api.models import ThanksReportItem
 from okc_py.api.models.ure import (
     AHTDataRecord,
     CSATDataRecord,
@@ -15,6 +16,7 @@ from okc_py.api.models.ure import (
     SalesDataRecord,
     SalesPotentialDataRecord,
 )
+from okc_py.api.repos.thanks import ThanksAPI
 from sqlalchemy import delete
 from stp_database.models.Stats import SpecDayKPI, SpecMonthKPI, SpecWeekKPI
 
@@ -123,10 +125,12 @@ def aggregate_kpi_data(
     api_results: list[tuple],
     model_class: type,
     extraction_period: datetime,
+    thanks_results: list[tuple[int, Any]] = None,
 ) -> list:
     """Aggregate KPI data by employee_id."""
     kpi_by_employee_id = {}
 
+    # Process standard KPI reports
     for (_, report_type), api_result in api_results:
         if not api_result or not hasattr(api_result, "data"):
             continue
@@ -157,6 +161,34 @@ def aggregate_kpi_data(
                 kpi_by_employee_id[employee_id] = kpi_obj
 
             mapper(kpi_by_employee_id[employee_id], record)
+
+    # Process thanks data
+    if thanks_results:
+        for _, thanks_result in thanks_results:
+            if not thanks_result:
+                continue
+
+            items = thanks_result if isinstance(thanks_result, list) else []
+
+            for item in items:
+                if isinstance(item, dict):
+                    employee_id = item.get("whomId")
+                elif isinstance(item, ThanksReportItem):
+                    employee_id = item.whom_id
+                else:
+                    continue
+
+                if employee_id is None or employee_id == 0:
+                    continue
+
+                if employee_id not in kpi_by_employee_id:
+                    kpi_obj = model_class()
+                    kpi_obj.employee_id = employee_id
+                    kpi_obj.extraction_period = extraction_period
+                    kpi_by_employee_id[employee_id] = kpi_obj
+
+                current_thanks = getattr(kpi_by_employee_id[employee_id], "thanks", 0) or 0
+                kpi_by_employee_id[employee_id].thanks = current_thanks + 1
 
     return [kpi for kpi in kpi_by_employee_id.values() if kpi.employee_id]
 
@@ -197,6 +229,48 @@ async def fetch_kpi_reports(
     results = await fetcher.fetch_parallel(tasks, fetch_kpi)
     return [
         (task_params, result) for task_params, result in results if result is not None
+    ]
+
+
+async def fetch_thanks_reports(
+    api: UreAPI,
+    divisions: list[int],
+    start_date: str,
+    stop_date: str,
+) -> list:
+    """Fetch thanks reports from API using concurrent fetcher."""
+    thanks_api = ThanksAPI(api.client)
+
+    async def fetch_thanks(division: int):
+        try:
+            result = await thanks_api.get_report(
+                whom_units=[division],
+                start_date=start_date,
+                stop_date=stop_date,
+                statuses=[2],
+            )
+            if hasattr(result, "items"):
+                data = result.items
+            elif isinstance(result, list):
+                data = result
+            else:
+                data = []
+
+            if data:
+                logger.info(f"Division {division}: fetched {len(data)} thanks records")
+            return (division, data)
+        except Exception as e:
+            logger.error(f"Error fetching thanks for division {division}: {e}")
+            return (division, [])
+
+    fetcher = ConcurrentAPIFetcher(semaphore_limit=10)
+    results = await fetcher.fetch_parallel(
+        [(division,) for division in divisions], fetch_thanks
+    )
+    return [
+        result
+        for task_params, result in results
+        if result is not None and result[1]
     ]
 
 
@@ -258,7 +332,36 @@ async def process_kpi(
         f"[{model_name}] Fetched {len(api_results)} API results, aggregating data"
     )
 
-    kpi_data = aggregate_kpi_data(api_results, model_class, extraction_period)
+    # Fetch thanks data
+    thanks_unit_ids = list(api.unites.values())
+
+    if start_date:
+        if use_week_period:
+            end_date = start_date + timedelta(days=7)
+        elif model_name == "SpecMonthKPI":
+            if start_date.month == 12:
+                end_date = start_date.replace(year=start_date.year + 1, month=1, day=1)
+            else:
+                end_date = start_date.replace(month=start_date.month + 1, day=1)
+        else:
+            end_date = start_date + timedelta(days=1)
+        thanks_start = start_date.strftime("%d.%m.%Y")
+        thanks_end = end_date.strftime("%d.%m.%Y")
+    else:
+        yesterday = get_yesterday_date()
+        thanks_start = yesterday.strftime("%d.%m.%Y")
+        thanks_end = (yesterday + timedelta(days=1)).strftime("%d.%m.%Y")
+
+    logger.info(
+        f"[{model_name}] Fetching thanks data for period {thanks_start} - {thanks_end}"
+    )
+    thanks_results = await fetch_thanks_reports(
+        api, thanks_unit_ids, thanks_start, thanks_end
+    )
+
+    kpi_data = aggregate_kpi_data(
+        api_results, model_class, extraction_period, thanks_results
+    )
     if not kpi_data:
         logger.warning(f"[{model_name}] No KPI data aggregated after processing")
         return 0

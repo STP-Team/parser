@@ -454,7 +454,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/71/c5/2564d917503fe8d68
 [[package]]
 name = "okc-py"
 version = "1.4.1"
-source = { git = "https://github.com/stp-team/okc-py.git#418e8b3d010fa78ac81ee1d91938d7e44136bd4c" }
+source = { git = "https://github.com/stp-team/okc-py.git#baa4f30dc3f5829f22f5f326c121cd33eab9d19e" }
 dependencies = [
     { name = "aiohttp", extra = ["speedups"] },
     { name = "pydantic" },
@@ -752,7 +752,7 @@ wheels = [
 [[package]]
 name = "stp-database"
 version = "2.0"
-source = { git = "https://github.com/STP-Team/stp-database#71a204e8e90cb714c525cdb2fc18a81eee84279b" }
+source = { git = "https://github.com/STP-Team/stp-database#a891966ad7dcfccbd356753505118da58c47ac8b" }
 dependencies = [
     { name = "aiomysql" },
     { name = "infrastructure" },
